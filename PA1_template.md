@@ -1,61 +1,161 @@
 # Reproducible Research: Peer Assessment 1
+Research reproduced by: Zhengming Song at Sun May 18 19:09:11 2014
+
 
 
 ## Loading and preprocessing the data
 
 ```r
-data = read.table("activity.csv", sep = ",", header = T)
-head(data)
+rawdata = read.table("activity.csv", sep = ",", header = T)
+data = rawdata[!is.na(rawdata$steps), ]
+dates = levels(data$date)
+cleandata = data.frame(date = as.Date(dates), totsteps = rep(0, length(dates)))
+for (i in 1:length(dates)) {
+    cleandata$totsteps[i] = sum(data$steps[data$date == dates[i]])
+}
+head(cleandata)
 ```
 
 ```
-##   steps       date interval
-## 1    NA 2012-10-01        0
-## 2    NA 2012-10-01        5
-## 3    NA 2012-10-01       10
-## 4    NA 2012-10-01       15
-## 5    NA 2012-10-01       20
-## 6    NA 2012-10-01       25
+##         date totsteps
+## 1 2012-10-01        0
+## 2 2012-10-02      126
+## 3 2012-10-03    11352
+## 4 2012-10-04    12116
+## 5 2012-10-05    13294
+## 6 2012-10-06    15420
 ```
 
 
 ## What is mean total number of steps taken per day?
 
 ```r
-# Make histogram of steps data that is not NA
-steps = data$steps[!is.na(data$steps)]
-hist(steps, xlab = "steps")
+hist(cleandata$totsteps, xlab = "steps")
 ```
 
 ![plot of chunk unnamed-chunk-2](figure/unnamed-chunk-2.png) 
 
-
 ```r
-# calculate mean
-mean(steps)
+avg = mean(cleandata$totsteps)
+med = median(cleandata$totsteps)
 ```
 
-```
-## [1] 37.38
-```
-
-```r
-# calculate median
-median(steps)
-```
-
-```
-## [1] 0
-```
-
-
+Mean of total number of steps taken per day is 9354.2295  
+Median of total number of steps taken per day is 1.0395 &times; 10<sup>4</sup>
 
 ## What is the average daily activity pattern?
 
+```r
+intervals = levels(factor(data$interval))
+avgstep = rep(0, length(intervals))
+for (i in 1:length(intervals)) {
+    avgstep[i] = mean(data$steps[data$interval == intervals[i]])
+}
 
+plot(intervals, avgstep, type = "l")
+```
+
+![plot of chunk unnamed-chunk-3](figure/unnamed-chunk-3.png) 
+
+Determine which interval contains the maximum number of steps on average across all the days
+
+```r
+ind = intervals[which(avgstep == max(avgstep))]
+```
+
+It turns out interval 835 contains maximum number of steps on average across all the days
 
 ## Imputing missing values
 
+```r
+num_na = sum(is.na(rawdata$steps))
+```
 
+* There are 2304 rows with NAs
+* Let's fill the missing values by the average value of that 5-minute interval
+* Let's call the new dataset as newdata
+
+```r
+newdata = rawdata
+ind = which(is.na(newdata), arr.ind = TRUE)
+for (i in 1:dim(ind)[1]) {
+    newdata$steps[ind[i, 1]] = avgstep[intervals == newdata$interval[ind[i, 
+        1]]]
+}
+head(newdata)
+```
+
+```
+##     steps       date interval
+## 1 1.71698 2012-10-01        0
+## 2 0.33962 2012-10-01        5
+## 3 0.13208 2012-10-01       10
+## 4 0.15094 2012-10-01       15
+## 5 0.07547 2012-10-01       20
+## 6 2.09434 2012-10-01       25
+```
+
+
+
+```r
+dates = levels(newdata$date)
+cleandata = data.frame(date = as.Date(dates), totsteps = rep(0, length(dates)))
+for (i in 1:length(dates)) {
+    cleandata$totsteps[i] = sum(newdata$steps[newdata$date == dates[i]])
+}
+hist(cleandata$totsteps, xlab = "steps")
+```
+
+![plot of chunk unnamed-chunk-7](figure/unnamed-chunk-7.png) 
+
+```r
+avg = mean(cleandata$totsteps)
+med = median(cleandata$totsteps)
+```
+
+* The mean value is 1.0766 &times; 10<sup>4</sup>, and the median is 1.0766 &times; 10<sup>4</sup> now. we can observe that the histogram and values are different as those from first part. Filling the missing data fix the estimation bias (the mean changed)
 
 ## Are there differences in activity patterns between weekdays and weekends?
+
+```r
+# Sepreate newdata to two sub dataset according to weekday or weekend
+dates = as.Date(newdata$date)
+weekendsind = which(weekdays(dates) == "Sunday" | weekdays(dates) == "Saturday", 
+    arr.ind = TRUE)
+weekdaysind = which(weekdays(dates) == "Monday" | weekdays(dates) == "Tuesday" | 
+    weekdays(dates) == "Wednesday" | weekdays(dates) == "Thursday" | weekdays(dates) == 
+    "Friday", arr.ind = TRUE)
+weekdaydata = newdata[weekdaysind, ]
+weekenddata = newdata[weekendsind, ]
+
+# construct new dataset, weekdata, to store the data for plotting
+intervals = levels(factor(weekenddata$interval))
+avgstep = rep(0, length(intervals))
+for (i in 1:length(intervals)) {
+    avgstep[i] = mean(weekenddata$steps[weekenddata$interval == intervals[i]])
+}
+
+weekdata = data.frame(interval = as.numeric(intervals), steps = avgstep)
+
+intervals = levels(factor(weekdaydata$interval))
+avgstep = rep(0, length(intervals))
+for (i in 1:length(intervals)) {
+    avgstep[i] = mean(weekdaydata$steps[weekdaydata$interval == intervals[i]])
+}
+
+weekdata = rbind(data.frame(interval = as.numeric(intervals), steps = avgstep), 
+    weekdata)
+
+# plot for comparison
+library(lattice)
+attach(weekdata)
+weekday.f = gl(2, length(interval)/2, labels = c("weekday", "weekend"))
+xyplot(steps ~ interval | weekday.f, auto.key = TRUE, layout = c(1, 2), type = "l", 
+    ylab = "Number of steps")
+```
+
+![plot of chunk unnamed-chunk-8](figure/unnamed-chunk-8.png) 
+
+* The new factor variable is weekday.f
+* From the panel plot above, we can observe that the behavior is different from weekend to weekday.
+
